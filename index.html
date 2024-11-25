@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>D&D Session Summarizer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        .upload-box {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background: #cccccc;
+        }
+        #status {
+            margin-top: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>D&D Session Summarizer</h1>
+    <div class="upload-box">
+        <form id="uploadForm">
+            <input type="file" id="transcript" accept=".txt" required>
+            <br><br>
+            <button type="submit">Generate Summary</button>
+        </form>
+    </div>
+    <div id="status"></div>
+
+    <script>
+        document.getElementById('uploadForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const status = document.getElementById('status');
+            const file = document.getElementById('transcript').files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            status.textContent = 'Generating summary...';
+            
+            try {
+                const response = await fetch('/summarize/', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) throw new Error('Failed to generate summary');
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `summary_${file.name.replace('.txt', '.docx')}`;
+                a.click();
+                
+                status.textContent = 'Summary downloaded!';
+            } catch (error) {
+                status.textContent = 'Error: ' + error.message;
+            }
+        };
+    </script>
+</body>
+</html>
