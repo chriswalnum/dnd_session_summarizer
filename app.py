@@ -1,21 +1,22 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
-from pydantic_settings import BaseSettings
+import streamlit as st
 import openai
 from docx import Document
+from io import BytesIO
+from pydantic_settings import BaseSettings
 
-# Settings from GitHub Secrets
 class Settings(BaseSettings):
     openai_api_key: str
     model_name: str = "gpt-4o-mini"
     temperature: float = 0.3
 
-# Initialize FastAPI and settings
-app = FastAPI()
+# Configure the page
+st.set_page_config(page_title="D&D Session Summarizer")
+st.title("D&D Session Summarizer")
+
+# Initialize settings and OpenAI
 settings = Settings()
 openai.api_key = settings.openai_api_key
 
-# Process the D&D transcript with OpenAI
 def process_transcript(text: str) -> str:
     response = openai.ChatCompletion.create(
         model=settings.model_name,
@@ -27,27 +28,45 @@ def process_transcript(text: str) -> str:
     )
     return response.choices[0].message.content
 
-# Serve the HTML upload page
-@app.get("/")
-async def read_root():
-    with open("index.html") as f:
-        return HTMLResponse(content=f.read())
-
-# Handle file upload and return summary
-@app.post("/summarize/")
-async def create_summary(file: UploadFile = File(...)):
-    if not file.filename.endswith('.txt'):
-        raise HTTPException(400, "Only .txt files allowed")
-    
-    # Read and process the file
-    text = (await file.read()).decode('utf-8')
-    summary = process_transcript(text)
-    
-    # Create and save the Word document
+def create_docx(summary: str) -> BytesIO:
     doc = Document()
     doc.add_heading('D&D Session Summary', 0)
     doc.add_paragraph(summary)
-    output_filename = f"summary_{file.filename.replace('.txt', '.docx')}"
-    doc.save(output_filename)
     
-    return FileResponse(output_filename)
+    # Save to BytesIO object
+    docx_file = BytesIO()
+    doc.save(docx_file)
+    docx_file.seek(0)
+    return docx_file
+
+# File uploader
+uploaded_file = st.file_uploader("Upload your D&D session transcript", type=['txt'])
+
+if uploaded_file:
+    # Add a generate button
+    if st.button('Generate Summary'):
+        with st.spinner('Generating summary...'):
+            # Read and decode the file
+            text = uploaded_file.read().decode('utf-8')
+            
+            # Process the transcript
+            try:
+                summary = process_transcript(text)
+                
+                # Create the Word document
+                docx_file = create_docx(summary)
+                
+                # Show preview of summary
+                st.subheader("Summary Preview:")
+                st.write(summary)
+                
+                # Download button
+                st.download_button(
+                    label="Download Summary as DOCX",
+                    data=docx_file,
+                    file_name=f"summary_{uploaded_file.name.replace('.txt', '.docx')}",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                )
+                
+            except Exception as e:
+                st.error(f"An error occurred: {str(e)}")
