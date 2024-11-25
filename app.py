@@ -7,15 +7,15 @@ from io import BytesIO
 st.set_page_config(page_title="D&D Session Summarizer")
 st.title("D&D Session Summarizer")
 
-# Initialize OpenAI API key from Streamlit secrets
-openai.api_key = st.secrets["openai"]["openai_api_key"]
+# Initialize OpenAI client from Streamlit secrets
+client = openai.OpenAI(api_key=st.secrets["openai"]["openai_api_key"])
 
 # Constants for model settings
 MODEL_NAME = "gpt-4o-mini"
 TEMPERATURE = 0.3
 
 def process_transcript(text: str) -> str:
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=MODEL_NAME,
         temperature=TEMPERATURE,
         messages=[
