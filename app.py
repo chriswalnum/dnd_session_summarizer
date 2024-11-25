@@ -2,25 +2,22 @@ import streamlit as st
 import openai
 from docx import Document
 from io import BytesIO
-from pydantic_settings import BaseSettings
-
-class Settings(BaseSettings):
-    openai_api_key: str
-    model_name: str = "gpt-4o-mini"
-    temperature: float = 0.3
 
 # Configure the page
 st.set_page_config(page_title="D&D Session Summarizer")
 st.title("D&D Session Summarizer")
 
-# Initialize settings and OpenAI
-settings = Settings()
-openai.api_key = settings.openai_api_key
+# Initialize OpenAI API key from Streamlit secrets
+openai.api_key = st.secrets["openai"]["openai_api_key"]
+
+# Constants for model settings
+MODEL_NAME = "gpt-4o-mini"
+TEMPERATURE = 0.3
 
 def process_transcript(text: str) -> str:
     response = openai.ChatCompletion.create(
-        model=settings.model_name,
-        temperature=settings.temperature,
+        model=MODEL_NAME,
+        temperature=TEMPERATURE,
         messages=[
             {"role": "system", "content": "You are a D&D session summarizer. Extract key story events, character actions, and plot developments. Format with: Key Plot Points, Important NPCs, Character Actions, Locations, Quest Updates"},
             {"role": "user", "content": text}
