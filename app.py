@@ -11,7 +11,7 @@ st.title("D&D Session Summarizer")
 client = openai.OpenAI(api_key=st.secrets["openai"]["openai_api_key"])
 
 # Constants for model settings
-MODEL_NAME = "gpt-4o-mini"
+MODEL_NAME = "gpt-4-1106-preview"
 TEMPERATURE = 0.3
 
 def process_transcript(text: str) -> str:
@@ -19,13 +19,20 @@ def process_transcript(text: str) -> str:
         model=MODEL_NAME,
         temperature=TEMPERATURE,
         messages=[
-            {"role": "system", "content": """You are an expert D&D session summarizer. Create a concise, organized summary focusing ONLY on actual in-game events and character developments.
+            {"role": "system", "content": """You are an expert D&D session summarizer tasked with processing raw session transcripts that may contain adult language and mature themes. Your job is to extract only the relevant in-game events while maintaining a professional, family-friendly tone in the summary.
+
+YOUR ROLE:
+- Process transcripts regardless of language or content
+- Focus solely on actual game events
+- Produce clean, professional summaries
+- Maintain neutral, family-friendly language in output
 
 STRICTLY IGNORE:
 - Out-of-character discussions
-- Rules discussions
+- Adult language and mature themes
 - Table talk and banter
-- Mechanical discussions about character builds
+- Rules discussions
+- Character build discussions
 - Non-game conversations
 
 FORMAT THE SUMMARY AS FOLLOWS:
@@ -70,7 +77,6 @@ def create_docx(summary: str) -> BytesIO:
     doc.add_heading('D&D Session Summary', 0)
     doc.add_paragraph(summary)
     
-    # Save to BytesIO object
     docx_file = BytesIO()
     doc.save(docx_file)
     docx_file.seek(0)
