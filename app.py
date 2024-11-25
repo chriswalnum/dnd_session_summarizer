@@ -19,7 +19,47 @@ def process_transcript(text: str) -> str:
         model=MODEL_NAME,
         temperature=TEMPERATURE,
         messages=[
-            {"role": "system", "content": "You are a D&D session summarizer. Extract key story events, character actions, and plot developments. Format with: Key Plot Points, Important NPCs, Character Actions, Locations, Quest Updates"},
+            {"role": "system", "content": """You are an expert D&D session summarizer. Create a concise, organized summary focusing ONLY on actual in-game events and character developments.
+
+STRICTLY IGNORE:
+- Out-of-character discussions
+- Rules discussions
+- Table talk and banter
+- Mechanical discussions about character builds
+- Non-game conversations
+
+FORMAT THE SUMMARY AS FOLLOWS:
+
+MISSION CONTEXT:
+- Current quest/objective
+- Recent important events leading to current situation
+- Where the party is and why
+
+KEY EVENTS:
+- Major story developments
+- Significant combat encounters
+- Important discoveries
+- Critical decisions made by the party
+
+CHARACTER ACTIONS & DEVELOPMENT:
+- Notable individual character moments
+- Key role-playing decisions
+- Significant combat achievements
+- Character relationships/interactions
+
+ENVIRONMENT & DISCOVERIES:
+- New locations explored
+- Important items found
+- Environmental challenges overcome
+- Significant NPCs encountered
+
+CURRENT SITUATION:
+- Where the party ended up
+- Immediate challenges ahead
+- Unresolved threats
+- Available options/next steps
+
+Use dramatic, narrative language focused on the story and adventure. Treat it like a fantasy tale rather than a game report."""},
             {"role": "user", "content": text}
         ]
     )
