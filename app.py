@@ -24,13 +24,45 @@ PARTY_MEMBERS = {
     "Geoff": "Dungeon Master"
 }
 
+def chunk_text(text: str, chunk_size: int = 12000) -> list[str]:
+    """Split text into chunks that won't exceed token limits"""
+    words = text.split()
+    chunks = []
+    current_chunk = []
+    current_length = 0
+    
+    for word in words:
+        # Rough estimate: 1 word ≈ 1.5 tokens on average
+        word_length = len(word) * 1.5
+        if current_length + word_length > chunk_size:
+            chunks.append(' '.join(current_chunk))
+            current_chunk = [word]
+            current_length = word_length
+        else:
+            current_chunk.append(word)
+            current_length += word_length
+    
+    if current_chunk:
+        chunks.append(' '.join(current_chunk))
+    return chunks
+
 def sanitize_text(text: str) -> str:
-    """Step 1: Clean up vulgar content"""
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",  # Using a different model for content sanitization
-        temperature=0.3,
-        messages=[
-            {"role": "system", "content": """You are a content sanitizer for D&D session transcripts. Your job is to:
+    """Step 1: Clean up vulgar content with chunk processing"""
+    chunks = chunk_text(text)
+    cleaned_chunks = []
+    
+    # Create a progress bar for chunk processing
+    total_chunks = len(chunks)
+    if total_chunks > 1:
+        st.write(f"Processing {total_chunks} chunks of text...")
+        progress_bar = st.progress(0)
+    
+    for i, chunk in enumerate(chunks):
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            temperature=0.3,
+            messages=[
+                {"role": "system", "content": """You are a content sanitizer for D&D session transcripts. Your job is to:
 1. Replace vulgar language with clean alternatives
 2. Convert explicit descriptions to family-friendly versions
 3. Maintain all game events and actions
@@ -44,18 +76,32 @@ Example transformations:
 - Crude jokes → "[friendly banter]"
 
 Return the cleaned text only, without any explanations or markers."""},
-            {"role": "user", "content": text}
-        ]
-    )
-    return response.choices[0].message.content
+                {"role": "user", "content": chunk}
+            ]
+        )
+        cleaned_chunks.append(response.choices[0].message.content)
+        
+        # Update progress bar if multiple chunks
+        if total_chunks > 1:
+            progress_bar.progress((i + 1) / total_chunks)
+    
+    if total_chunks > 1:
+        st.write("Chunk processing complete!")
+    
+    return ' '.join(cleaned_chunks)
 
 def generate_summary(text: str) -> str:
     """Step 2: Create initial summary from sanitized text"""
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        temperature=TEMPERATURE,
-        messages=[
-            {"role": "system", "content": f"""You are a D&D session summarizer. Create a professional summary of the game events.
+    # Split into chunks if needed
+    chunks = chunk_text(text, chunk_size=8000)  # Smaller chunks for summary
+    summaries = []
+    
+    for chunk in chunks:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            temperature=TEMPERATURE,
+            messages=[
+                {"role": "system", "content": f"""You are a D&D session summarizer. Create a professional summary of the game events.
 
 PARTY MEMBERS:
 {', '.join(f"{name} ({role})" for name, role in PARTY_MEMBERS.items())}
@@ -88,15 +134,31 @@ CURRENT SITUATION:
 - Where the party ended up
 - Immediate challenges ahead
 - Available options/next steps"""},
-            {"role": "user", "content": text}
-        ]
-    )
-    return response.choices[0].message.content
+                {"role": "user", "content": chunk}
+            ]
+        )
+        summaries.append(response.choices[0].message.content)
+    
+    # If we had multiple chunks, combine them
+    if len(summaries) > 1:
+        combined_summary = "\n\n".join(summaries)
+        # Create a final unified summary
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            temperature=TEMPERATURE,
+            messages=[
+                {"role": "system", "content": "You are a D&D session summarizer. Combine these multiple summaries into one coherent summary, removing any redundancy while maintaining all important events and details."},
+                {"role": "user", "content": combined_summary}
+            ]
+        )
+        return response.choices[0].message.content
+    else:
+        return summaries[0]
 
 def polish_summary(text: str) -> str:
     """Step 3: Final polish to ensure professional tone"""
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",  # Using a different model for final polish
+        model="gpt-3.5-turbo",
         temperature=0.3,
         messages=[
             {"role": "system", "content": """You are an editor reviewing D&D session summaries. Your task is to:
