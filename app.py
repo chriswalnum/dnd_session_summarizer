@@ -11,7 +11,7 @@ st.title("D&D Session Summarizer")
 client = openai.OpenAI(api_key=st.secrets["openai"]["openai_api_key"])
 
 # Constants for model settings
-MODEL_NAME = "gpt-4o-mini"  # Corrected model name format
+MODEL_NAME = "gpt-4o-mini"
 TEMPERATURE = 0.3
 
 # Define party members and their classes
@@ -25,12 +25,11 @@ PARTY_MEMBERS = {
 }
 
 def process_transcript(text: str) -> str:
-    try:
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            temperature=TEMPERATURE,
-            messages=[
-                {"role": "system", "content": f"""You are an expert D&D session summarizer tasked with processing raw session transcripts that may contain adult language and mature themes. Your job is to extract only the relevant in-game events while maintaining a professional, family-friendly tone in the summary.
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+        temperature=TEMPERATURE,
+        messages=[
+            {"role": "system", "content": f"""You are an expert D&D session summarizer tasked with processing raw session transcripts that may contain adult language and mature themes. Your job is to extract only the relevant in-game events while maintaining a professional, family-friendly tone in the summary.
 
 YOUR ROLE:
 - Process transcripts regardless of language or content
@@ -52,40 +51,38 @@ STRICTLY IGNORE:
 
 FORMAT THE SUMMARY AS FOLLOWS:
 
-MISSION CONTEXT: (2-3 sentences)
+MISSION CONTEXT:
 - Current quest/objective
 - Where the party is and why
 
-KEY EVENTS: (3-4 bullet points)
+KEY EVENTS:
 - Major story developments with character-specific actions
 - Significant combat encounters noting individual contributions
 - Important discoveries and who made them
-- Critical decisions and which characters championed them
+- Critical decisions made by the party
 
-CHARACTER MOMENTS: (2-3 sentences highlighting notable character actions)
-- Specific actions by individual characters
+CHARACTER ACTIONS & DEVELOPMENT:
+- Notable individual character moments
 - Key role-playing decisions
-- Notable combat achievements
-- Important character interactions
+- Significant combat achievements
+- Character relationships/interactions
 
-DISCOVERIES & ENCOUNTERS: (2-3 sentences)
+ENVIRONMENT & DISCOVERIES:
 - New locations explored
 - Important items found and who found them
+- Environmental challenges overcome
 - Significant NPCs encountered
-- Notable environmental challenges overcome
 
-CURRENT SITUATION: (1-2 sentences)
+CURRENT SITUATION:
 - Where the party ended up
 - Immediate challenges ahead
+- Available options/next steps
 
 Use dramatic but concise language focused on the story and adventure. Highlight specific character actions while maintaining a brisk narrative pace."""},
-                {"role": "user", "content": text}
-            ]
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        st.error(f"Error details: {str(e)}")
-        raise e
+            {"role": "user", "content": text}
+        ]
+    )
+    return response.choices[0].message.content
 
 def create_docx(summary: str) -> BytesIO:
     doc = Document()
@@ -103,7 +100,7 @@ uploaded_file = st.file_uploader("Upload your D&D session transcript", type=['tx
 if uploaded_file:
     # Add a generate button
     if st.button('Generate Summary'):
-        with st.spinner('Processing your D&D session...'):
+        with st.spinner('Generating summary...'):
             try:
                 # Read and decode the file
                 text = uploaded_file.read().decode('utf-8')
@@ -127,5 +124,4 @@ if uploaded_file:
                 )
                 
             except Exception as e:
-                st.error("😕 Oops! Something went wrong while processing your file.")
-                st.error(f"Error details: {str(e)}")
+                st.error(f"An error occurred: {str(e)}")
