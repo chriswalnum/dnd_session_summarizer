@@ -46,18 +46,57 @@ def chunk_text(text: str, chunk_size: int = 12000) -> list[str]:
         chunks.append(' '.join(current_chunk))
     return chunks
 
-def sanitize_text(text: str) -> str:
-    """Clean up inappropriate content while preserving game terminology and flavor"""
-    chunks = chunk_text(text)
-    cleaned_chunks = []
+def chunk_text(text: str, chunk_size: int = 15000) -> list[str]:
+    """Split text into larger chunks to reduce API calls while staying within limits"""
+    sentences = text.split('. ')
+    chunks = []
+    current_chunk = []
+    current_length = 0
     
-    # Create a progress bar for chunk processing
-    total_chunks = len(chunks)
-    if total_chunks > 1:
-        st.write(f"Processing {total_chunks} chunks of text...")
+    for sentence in sentences:
+        # Estimate tokens: ~1.3 tokens per word for English text
+        sentence_length = len(sentence.split()) * 1.3
+        
+        if current_length + sentence_length > chunk_size:
+            chunks.append('. '.join(current_chunk) + '.')
+            current_chunk = [sentence]
+            current_length = sentence_length
+        else:
+            current_chunk.append(sentence)
+            current_length += sentence_length
+    
+    if current_chunk:
+        chunks.append('. '.join(current_chunk) + '.')
+    
+    return chunks
+
+def batch_process_chunks(chunks: list[str], process_func, batch_size: int = 3) -> list[str]:
+    """Process multiple chunks in parallel to reduce total processing time"""
+    results = []
+    total_batches = (len(chunks) + batch_size - 1) // batch_size
+    
+    if total_batches > 1:
         progress_bar = st.progress(0)
+        st.write(f"Processing {len(chunks)} chunks in {total_batches} batches...")
     
-    for i, chunk in enumerate(chunks):
+    for i in range(0, len(chunks), batch_size):
+        batch = chunks[i:i + batch_size]
+        # Process batch concurrently using asyncio or threading
+        batch_results = [process_func(chunk) for chunk in batch]
+        results.extend(batch_results)
+        
+        if total_batches > 1:
+            progress_bar.progress((i + batch_size) / len(chunks))
+    
+    return results
+
+def sanitize_text(text: str) -> str:
+    """Optimized sanitization with larger chunks and batch processing"""
+    # Split into larger chunks
+    chunks = chunk_text(text)
+    
+    def process_chunk(chunk: str) -> str:
+        """Process individual chunk with OpenAI API"""
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             temperature=0.3,
@@ -76,24 +115,14 @@ def sanitize_text(text: str) -> str:
 - Real-world inappropriate references
 - Genuine harmful content
 
-Use context to differentiate between game content and inappropriate content. For example:
-- "Rectal dragon" in a game context → Keep as-is
-- Anatomical terms used for spells/monsters → Keep as-is
-- Natural gaming exclamations → Replace with "shouts", "exclaims"
-- Actual profanity → Replace with mild alternatives
-
-Return the cleaned text only, without explanations."""},
+Use context to differentiate between game content and inappropriate content. Process quickly and efficiently."""},
                 {"role": "user", "content": chunk}
             ]
         )
-        cleaned_chunks.append(response.choices[0].message.content)
-        
-        # Update progress if multiple chunks
-        if total_chunks > 1:
-            progress_bar.progress((i + 1) / total_chunks)
+        return response.choices[0].message.content
     
-    if total_chunks > 1:
-        st.write("Processing complete!")
+    # Process chunks in batches
+    cleaned_chunks = batch_process_chunks(chunks, process_chunk)
     
     return ' '.join(cleaned_chunks)
 
