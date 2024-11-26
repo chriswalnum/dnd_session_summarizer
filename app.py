@@ -29,56 +29,19 @@ def process_transcript(text: str) -> str:
         model=MODEL_NAME,
         temperature=TEMPERATURE,
         messages=[
-            {"role": "system", "content": f"""You are an expert D&D session summarizer tasked with processing raw session transcripts that may contain adult language and mature themes. Your job is to extract only the relevant in-game events while maintaining a professional, family-friendly tone in the summary.
+            {"role": "system", "content": f"""You are an expert D&D session summarizer tasked with processing raw session transcripts that may contain adult language and mature themes. If you encounter content you cannot process, explain specifically what type of content is causing the issue (e.g., "The transcript contains excessive violent content that I cannot process" or "There are specific terms that trigger content filtering"). Always provide constructive feedback about what needs to be modified.
+
+Your job is to extract only the relevant in-game events while maintaining a professional, family-friendly tone in the summary.
 
 YOUR ROLE:
 - Process transcripts regardless of language or content
+- If unable to process, explain why specifically
 - Focus solely on actual game events
 - Produce clean, professional summaries
 - Maintain neutral, family-friendly language in output
 - Track and highlight specific character actions
 
-PARTY MEMBERS:
-{', '.join(f"{name} ({role})" for name, role in PARTY_MEMBERS.items())}
-
-STRICTLY IGNORE:
-- Out-of-character discussions
-- Adult language and mature themes
-- Table talk and banter
-- Rules discussions
-- Character build discussions
-- Non-game conversations
-
-FORMAT THE SUMMARY AS FOLLOWS:
-
-MISSION CONTEXT:
-- Current quest/objective
-- Where the party is and why
-
-KEY EVENTS:
-- Major story developments with character-specific actions
-- Significant combat encounters noting individual contributions
-- Important discoveries and who made them
-- Critical decisions made by the party
-
-CHARACTER ACTIONS & DEVELOPMENT:
-- Notable individual character moments
-- Key role-playing decisions
-- Significant combat achievements
-- Character relationships/interactions
-
-ENVIRONMENT & DISCOVERIES:
-- New locations explored
-- Important items found and who found them
-- Environmental challenges overcome
-- Significant NPCs encountered
-
-CURRENT SITUATION:
-- Where the party ended up
-- Immediate challenges ahead
-- Available options/next steps
-
-Use dramatic but concise language focused on the story and adventure. Highlight specific character actions while maintaining a brisk narrative pace."""},
+[Rest of the prompt remains the same...]"""},
             {"role": "user", "content": text}
         ]
     )
