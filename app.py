@@ -24,24 +24,78 @@ PARTY_MEMBERS = {
     "Geoff": "Dungeon Master"
 }
 
-def process_transcript(text: str) -> str:
+def preprocess_transcript(text: str) -> str:
+    """Clean up the transcript before summarization."""
     response = client.chat.completions.create(
         model=MODEL_NAME,
         temperature=TEMPERATURE,
         messages=[
-            {"role": "system", "content": f"""You are an expert D&D session summarizer tasked with processing raw session transcripts that may contain adult language and mature themes. If you encounter content you cannot process, explain specifically what type of content is causing the issue (e.g., "The transcript contains excessive violent content that I cannot process" or "There are specific terms that trigger content filtering"). Always provide constructive feedback about what needs to be modified.
+            {"role": "system", "content": """You are a professional content editor specializing in transforming raw D&D session transcripts into clean, family-friendly text while preserving all game events and narrative elements.
 
-Your job is to extract only the relevant in-game events while maintaining a professional, family-friendly tone in the summary.
+YOUR TASK:
+1. Read through the transcript
+2. Replace any crude language with appropriate alternatives
+3. Maintain all game events, combat, and story elements
+4. Keep character names and actions intact
+5. Preserve important dialogue but clean up the language
+6. Remove excessive profanity or adult themes while keeping the core meaning
+7. Format player actions and dialogue clearly
 
-YOUR ROLE:
-- Process transcripts regardless of language or content
-- If unable to process, explain why specifically
-- Focus solely on actual game events
-- Produce clean, professional summaries
-- Maintain neutral, family-friendly language in output
-- Track and highlight specific character actions
+Example conversions:
+- Replace explicit descriptions with "attacks", "defeats", "overcomes"
+- Convert crude anatomical references to clinical terms if needed
+- Maintain combat descriptions but remove graphic violence
+- Keep emotional moments but remove explicit language
 
-[Rest of the prompt remains the same...]"""},
+Return the cleaned transcript in a format ready for summarization.
+
+If you encounter content you cannot process, explain specifically what needs to be modified."""},
+            {"role": "user", "content": text}
+        ]
+    )
+    return response.choices[0].message.content
+
+def process_transcript(text: str) -> str:
+    """Generate summary from cleaned transcript."""
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+        temperature=TEMPERATURE,
+        messages=[
+            {"role": "system", "content": f"""You are an expert D&D session summarizer. Your job is to extract the relevant in-game events and create an engaging summary.
+
+PARTY MEMBERS:
+{', '.join(f"{name} ({role})" for name, role in PARTY_MEMBERS.items())}
+
+FORMAT THE SUMMARY AS FOLLOWS:
+
+MISSION CONTEXT:
+- Current quest/objective
+- Where the party is and why
+
+KEY EVENTS:
+- Major story developments with character-specific actions
+- Significant combat encounters noting individual contributions
+- Important discoveries and who made them
+- Critical decisions made by the party
+
+CHARACTER ACTIONS & DEVELOPMENT:
+- Notable individual character moments
+- Key role-playing decisions
+- Significant combat achievements
+- Character relationships/interactions
+
+ENVIRONMENT & DISCOVERIES:
+- New locations explored
+- Important items found and who found them
+- Environmental challenges overcome
+- Significant NPCs encountered
+
+CURRENT SITUATION:
+- Where the party ended up
+- Immediate challenges ahead
+- Available options/next steps
+
+Use dramatic but concise language focused on the story and adventure. Highlight specific character actions while maintaining a brisk narrative pace."""},
             {"role": "user", "content": text}
         ]
     )
@@ -63,13 +117,18 @@ uploaded_file = st.file_uploader("Upload your D&D session transcript", type=['tx
 if uploaded_file:
     # Add a generate button
     if st.button('Generate Summary'):
-        with st.spinner('Generating summary...'):
+        with st.spinner('Processing your D&D session...'):
             try:
                 # Read and decode the file
                 text = uploaded_file.read().decode('utf-8')
                 
-                # Process the transcript
-                summary = process_transcript(text)
+                # First, clean up the transcript
+                with st.spinner('Cleaning up transcript...'):
+                    cleaned_text = preprocess_transcript(text)
+                
+                # Then generate summary from cleaned text
+                with st.spinner('Generating summary...'):
+                    summary = process_transcript(cleaned_text)
                 
                 # Create the Word document
                 docx_file = create_docx(summary)
