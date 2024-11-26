@@ -24,49 +24,25 @@ PARTY_MEMBERS = {
     "Geoff": "Dungeon Master"
 }
 
-def preprocess_transcript(text: str) -> str:
-    """Clean up the transcript before summarization."""
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        temperature=TEMPERATURE,
-        messages=[
-            {"role": "system", "content": """You are a professional content editor specializing in transforming raw D&D session transcripts into clean, family-friendly text while preserving all game events and narrative elements.
-
-YOUR TASK:
-1. Read through the transcript
-2. Replace any crude language with appropriate alternatives
-3. Maintain all game events, combat, and story elements
-4. Keep character names and actions intact
-5. Preserve important dialogue but clean up the language
-6. Remove excessive profanity or adult themes while keeping the core meaning
-7. Format player actions and dialogue clearly
-
-Example conversions:
-- Replace explicit descriptions with "attacks", "defeats", "overcomes"
-- Convert crude anatomical references to clinical terms if needed
-- Maintain combat descriptions but remove graphic violence
-- Keep emotional moments but remove explicit language
-
-Return the cleaned transcript in a format ready for summarization.
-
-If you encounter content you cannot process, explain specifically what needs to be modified."""},
-            {"role": "user", "content": text}
-        ]
-    )
-    return response.choices[0].message.content
-
 def process_transcript(text: str) -> str:
-    """Generate summary from cleaned transcript."""
+    """Process transcript with built-in content handling"""
     response = client.chat.completions.create(
         model=MODEL_NAME,
         temperature=TEMPERATURE,
         messages=[
-            {"role": "system", "content": f"""You are an expert D&D session summarizer. Your job is to extract the relevant in-game events and create an engaging summary.
+            {"role": "system", "content": f"""You are an expert D&D session summarizer with content moderation capabilities. Follow these steps:
+
+1. CONTENT PROCESSING:
+- If the transcript contains adult language or mature themes, mentally convert them to family-friendly alternatives
+- Preserve all game events, combat, and story elements
+- Keep character names and actions intact
+- If you encounter content you absolutely cannot process, explain specifically what needs to be modified
+
+2. SUMMARY GENERATION:
+Only after processing the content, create a summary with the following format:
 
 PARTY MEMBERS:
 {', '.join(f"{name} ({role})" for name, role in PARTY_MEMBERS.items())}
-
-FORMAT THE SUMMARY AS FOLLOWS:
 
 MISSION CONTEXT:
 - Current quest/objective
@@ -122,13 +98,8 @@ if uploaded_file:
                 # Read and decode the file
                 text = uploaded_file.read().decode('utf-8')
                 
-                # First, clean up the transcript
-                with st.spinner('Cleaning up transcript...'):
-                    cleaned_text = preprocess_transcript(text)
-                
-                # Then generate summary from cleaned text
-                with st.spinner('Generating summary...'):
-                    summary = process_transcript(cleaned_text)
+                # Process transcript and generate summary
+                summary = process_transcript(text)
                 
                 # Create the Word document
                 docx_file = create_docx(summary)
