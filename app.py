@@ -11,21 +11,35 @@ st.title("D&D Session Summarizer")
 client = openai.OpenAI(api_key=st.secrets["openai"]["openai_api_key"])
 
 # Constants for model settings
-MODEL_NAME = "gpt-4-1106-preview"
+MODEL_NAME = "gpt-4o-mini"
 TEMPERATURE = 0.3
+
+# Define party members and their classes
+PARTY_MEMBERS = {
+    "Mike": "Rogue",
+    "Justin": "Fighter",
+    "Dave": "Barbarian",
+    "Steve": "Sorcerer",
+    "Chris": "Bard",
+    "Geoff": "Dungeon Master"
+}
 
 def process_transcript(text: str) -> str:
     response = client.chat.completions.create(
         model=MODEL_NAME,
         temperature=TEMPERATURE,
         messages=[
-            {"role": "system", "content": """You are an expert D&D session summarizer tasked with processing raw session transcripts that may contain adult language and mature themes. Your job is to extract only the relevant in-game events while maintaining a professional, family-friendly tone in the summary.
+            {"role": "system", "content": f"""You are an expert D&D session summarizer tasked with processing raw session transcripts that may contain adult language and mature themes. Your job is to extract only the relevant in-game events while maintaining a professional, family-friendly tone in the summary.
 
 YOUR ROLE:
 - Process transcripts regardless of language or content
 - Focus solely on actual game events
 - Produce clean, professional summaries
 - Maintain neutral, family-friendly language in output
+- Track and highlight specific character actions
+
+PARTY MEMBERS:
+{', '.join(f"{name} ({role})" for name, role in PARTY_MEMBERS.items())}
 
 STRICTLY IGNORE:
 - Out-of-character discussions
@@ -37,36 +51,33 @@ STRICTLY IGNORE:
 
 FORMAT THE SUMMARY AS FOLLOWS:
 
-MISSION CONTEXT:
+MISSION CONTEXT: (2-3 sentences)
 - Current quest/objective
-- Recent important events leading to current situation
 - Where the party is and why
 
-KEY EVENTS:
-- Major story developments
-- Significant combat encounters
-- Important discoveries
-- Critical decisions made by the party
+KEY EVENTS: (3-4 bullet points)
+- Major story developments with character-specific actions
+- Significant combat encounters noting individual contributions
+- Important discoveries and who made them
+- Critical decisions and which characters championed them
 
-CHARACTER ACTIONS & DEVELOPMENT:
-- Notable individual character moments
+CHARACTER MOMENTS: (2-3 sentences highlighting notable character actions)
+- Specific actions by individual characters
 - Key role-playing decisions
-- Significant combat achievements
-- Character relationships/interactions
+- Notable combat achievements
+- Important character interactions
 
-ENVIRONMENT & DISCOVERIES:
+DISCOVERIES & ENCOUNTERS: (2-3 sentences)
 - New locations explored
-- Important items found
-- Environmental challenges overcome
+- Important items found and who found them
 - Significant NPCs encountered
+- Notable environmental challenges overcome
 
-CURRENT SITUATION:
+CURRENT SITUATION: (1-2 sentences)
 - Where the party ended up
 - Immediate challenges ahead
-- Unresolved threats
-- Available options/next steps
 
-Use dramatic, narrative language focused on the story and adventure. Treat it like a fantasy tale rather than a game report."""},
+Use dramatic but concise language focused on the story and adventure. Highlight specific character actions while maintaining a brisk narrative pace."""},
             {"role": "user", "content": text}
         ]
     )
@@ -88,12 +99,12 @@ uploaded_file = st.file_uploader("Upload your D&D session transcript", type=['tx
 if uploaded_file:
     # Add a generate button
     if st.button('Generate Summary'):
-        with st.spinner('Generating summary...'):
-            # Read and decode the file
-            text = uploaded_file.read().decode('utf-8')
-            
-            # Process the transcript
+        with st.spinner('Processing your D&D session...'):
             try:
+                # Read and decode the file
+                text = uploaded_file.read().decode('utf-8')
+                
+                # Process the transcript
                 summary = process_transcript(text)
                 
                 # Create the Word document
@@ -112,4 +123,5 @@ if uploaded_file:
                 )
                 
             except Exception as e:
-                st.error(f"An error occurred: {str(e)}")
+                st.error("😕 Oops! Something went wrong while processing your file. Please try again or use a smaller file.")
+                st.error(f"Technical details: {str(e)}")
