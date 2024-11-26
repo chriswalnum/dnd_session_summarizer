@@ -11,7 +11,7 @@ st.title("D&D Session Summarizer")
 client = openai.OpenAI(api_key=st.secrets["openai"]["openai_api_key"])
 
 # Constants for model settings
-MODEL_NAME = "gpt-4o-mini"
+MODEL_NAME = "gpt-4o-mini"  # Corrected model name format
 TEMPERATURE = 0.3
 
 # Define party members and their classes
@@ -25,11 +25,12 @@ PARTY_MEMBERS = {
 }
 
 def process_transcript(text: str) -> str:
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        temperature=TEMPERATURE,
-        messages=[
-            {"role": "system", "content": f"""You are an expert D&D session summarizer tasked with processing raw session transcripts that may contain adult language and mature themes. Your job is to extract only the relevant in-game events while maintaining a professional, family-friendly tone in the summary.
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            temperature=TEMPERATURE,
+            messages=[
+                {"role": "system", "content": f"""You are an expert D&D session summarizer tasked with processing raw session transcripts that may contain adult language and mature themes. Your job is to extract only the relevant in-game events while maintaining a professional, family-friendly tone in the summary.
 
 YOUR ROLE:
 - Process transcripts regardless of language or content
@@ -78,10 +79,13 @@ CURRENT SITUATION: (1-2 sentences)
 - Immediate challenges ahead
 
 Use dramatic but concise language focused on the story and adventure. Highlight specific character actions while maintaining a brisk narrative pace."""},
-            {"role": "user", "content": text}
-        ]
-    )
-    return response.choices[0].message.content
+                {"role": "user", "content": text}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error details: {str(e)}")
+        raise e
 
 def create_docx(summary: str) -> BytesIO:
     doc = Document()
@@ -123,5 +127,5 @@ if uploaded_file:
                 )
                 
             except Exception as e:
-                st.error("😕 Oops! Something went wrong while processing your file. Please try again or use a smaller file.")
-                st.error(f"Technical details: {str(e)}")
+                st.error("😕 Oops! Something went wrong while processing your file.")
+                st.error(f"Error details: {str(e)}")
