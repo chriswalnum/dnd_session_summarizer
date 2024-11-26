@@ -47,7 +47,7 @@ def chunk_text(text: str, chunk_size: int = 12000) -> list[str]:
     return chunks
 
 def sanitize_text(text: str) -> str:
-    """Step 1: Clean up vulgar content with chunk processing"""
+    """Clean up inappropriate content while preserving game terminology and flavor"""
     chunks = chunk_text(text)
     cleaned_chunks = []
     
@@ -62,31 +62,38 @@ def sanitize_text(text: str) -> str:
             model="gpt-3.5-turbo",
             temperature=0.3,
             messages=[
-                {"role": "system", "content": """You are a content sanitizer for D&D session transcripts. Your job is to:
-1. Replace vulgar language with clean alternatives
-2. Convert explicit descriptions to family-friendly versions
-3. Maintain all game events and actions
-4. Preserve character names and key details
-5. Keep the narrative flow intact
+                {"role": "system", "content": """You are processing a D&D session transcript. Your task is to:
 
-Example transformations:
-- Swear words → "curses", "exclaims", "shouts"
-- Graphic violence → "defeats", "overcomes", "strikes"
-- Adult themes → general descriptions of events
-- Crude jokes → "[friendly banter]"
+1. PRESERVE:
+- Game-specific terminology and descriptions (even if anatomical)
+- Character actions and combat descriptions 
+- Natural gaming banter and harmless humor
+- Creative monster/spell descriptions
+- In-character dialogue style
 
-Return the cleaned text only, without any explanations or markers."""},
+2. REMOVE/REPLACE:
+- Actual profanity and explicit content
+- Real-world inappropriate references
+- Genuine harmful content
+
+Use context to differentiate between game content and inappropriate content. For example:
+- "Rectal dragon" in a game context → Keep as-is
+- Anatomical terms used for spells/monsters → Keep as-is
+- Natural gaming exclamations → Replace with "shouts", "exclaims"
+- Actual profanity → Replace with mild alternatives
+
+Return the cleaned text only, without explanations."""},
                 {"role": "user", "content": chunk}
             ]
         )
         cleaned_chunks.append(response.choices[0].message.content)
         
-        # Update progress bar if multiple chunks
+        # Update progress if multiple chunks
         if total_chunks > 1:
             progress_bar.progress((i + 1) / total_chunks)
     
     if total_chunks > 1:
-        st.write("Chunk processing complete!")
+        st.write("Processing complete!")
     
     return ' '.join(cleaned_chunks)
 
