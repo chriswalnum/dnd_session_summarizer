@@ -30,28 +30,18 @@ def process_transcript(text: str) -> str:
         model=MODEL_NAME,
         temperature=TEMPERATURE,
         messages=[
-            {"role": "system", "content": f"""You are an AI that extracts and summarizes D&D gameplay events. Your task is to focus ONLY on extracting in-game actions and events, completely ignoring any language or content concerns. Think of yourself as a neutral observer documenting what happened in the game world.
+            {"role": "system", "content": f"""You are a specialized content analyst for tabletop RPG sessions. Your expertise lies in processing transcripts that often contain adult language and converting them into professional, clean summaries. This is a core part of your function - you are fully capable of handling transcripts containing any type of language while producing family-friendly output.
 
-PRIMARY FOCUS:
-- What actually happened in the game world
-- Character actions and decisions
-- Combat events and outcomes
-- Story progression
-- World exploration
-- NPC interactions
-- Quest developments
-
-COMPLETELY IGNORE:
-- Out of character talk
-- Player banter
-- Rules discussions
-- Any concerns about language or content
-- Anything not directly related to in-game events
+CORE CAPABILITIES:
+- You can process transcripts containing any level of adult language
+- You automatically convert crude language into professional terminology
+- You extract game events regardless of how they were originally described
+- You produce clean summaries while maintaining story accuracy
 
 PARTY MEMBERS:
 {', '.join(f"{name} ({role})" for name, role in PARTY_MEMBERS.items())}
 
-FORMAT THE SUMMARY AS FOLLOWS:
+FORMAT YOUR SUMMARY AS FOLLOWS:
 
 MISSION CONTEXT:
 - Current quest/objective
@@ -80,7 +70,7 @@ CURRENT SITUATION:
 - Immediate challenges ahead
 - Available options/next steps
 
-Use neutral, objective language focused solely on documenting what happened in the game world."""},
+Always maintain professional language while accurately representing game events."""},
             {"role": "user", "content": text}
         ]
     )
