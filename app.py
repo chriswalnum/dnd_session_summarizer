@@ -12,7 +12,7 @@ client = openai.OpenAI(api_key=st.secrets["openai"]["openai_api_key"])
 
 # Constants for model settings
 MODEL_NAME = "gpt-4o-mini"
-TEMPERATURE = 0.3
+TEMPERATURE = 0.1  # Reduced for more accurate summaries
 
 # Define party members and their classes
 PARTY_MEMBERS = {
@@ -24,30 +24,8 @@ PARTY_MEMBERS = {
     "Geoff": "Dungeon Master"
 }
 
-def chunk_text(text: str, chunk_size: int = 12000) -> list[str]:
-    """Split text into chunks that won't exceed token limits"""
-    words = text.split()
-    chunks = []
-    current_chunk = []
-    current_length = 0
-    
-    for word in words:
-        # Rough estimate: 1 word ≈ 1.5 tokens on average
-        word_length = len(word) * 1.5
-        if current_length + word_length > chunk_size:
-            chunks.append(' '.join(current_chunk))
-            current_chunk = [word]
-            current_length = word_length
-        else:
-            current_chunk.append(word)
-            current_length += word_length
-    
-    if current_chunk:
-        chunks.append(' '.join(current_chunk))
-    return chunks
-
 def chunk_text(text: str, chunk_size: int = 15000) -> list[str]:
-    """Split text into larger chunks to reduce API calls while staying within limits"""
+    """Split text into larger chunks while maintaining sentence integrity"""
     sentences = text.split('. ')
     chunks = []
     current_chunk = []
@@ -70,66 +48,60 @@ def chunk_text(text: str, chunk_size: int = 15000) -> list[str]:
     
     return chunks
 
-def batch_process_chunks(chunks: list[str], process_func, batch_size: int = 3) -> list[str]:
-    """Process multiple chunks in parallel to reduce total processing time"""
-    results = []
-    total_batches = (len(chunks) + batch_size - 1) // batch_size
-    
-    if total_batches > 1:
-        progress_bar = st.progress(0)
-        st.write(f"Processing {len(chunks)} chunks in {total_batches} batches...")
-    
-    for i in range(0, len(chunks), batch_size):
-        batch = chunks[i:i + batch_size]
-        # Process batch concurrently using asyncio or threading
-        batch_results = [process_func(chunk) for chunk in batch]
-        results.extend(batch_results)
-        
-        if total_batches > 1:
-            progress_bar.progress((i + batch_size) / len(chunks))
-    
-    return results
-
 def sanitize_text(text: str) -> str:
-    """Optimized sanitization with larger chunks and batch processing"""
-    # Split into larger chunks
+    """Minimal sanitization focused only on extreme content"""
     chunks = chunk_text(text)
+    cleaned_chunks = []
     
-    def process_chunk(chunk: str) -> str:
-        """Process individual chunk with OpenAI API"""
+    # Create a progress bar for chunk processing
+    total_chunks = len(chunks)
+    if total_chunks > 1:
+        st.write(f"Processing {total_chunks} chunks of text...")
+        progress_bar = st.progress(0)
+    
+    for i, chunk in enumerate(chunks):
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             temperature=0.3,
             messages=[
-                {"role": "system", "content": """You are processing a D&D session transcript. Your task is to:
+                {"role": "system", "content": """You are processing a D&D session transcript. Apply minimal sanitization:
 
-1. PRESERVE:
-- Game-specific terminology and descriptions (even if anatomical)
-- Character actions and combat descriptions 
-- Natural gaming banter and harmless humor
+KEEP AS-IS:
+- All D&D terminology and descriptions
+- Anatomical terms in game context
+- Mild crude humor and jokes
 - Creative monster/spell descriptions
-- In-character dialogue style
+- Casual swearing in game context
+- Character-specific traits (e.g., "dick sword")
+- Playful banter between players
+- References to bodily functions in game context
+- Non-malicious crude descriptions
 
-2. REMOVE/REPLACE:
-- Actual profanity and explicit content
-- Real-world inappropriate references
-- Genuine harmful content
+ONLY REMOVE/MODIFY:
+- Extreme hate speech or slurs
+- Explicit sexual content not relevant to game
+- Real-world bigotry or harassment
+- Graphic violence outside game context
 
-Use context to differentiate between game content and inappropriate content. Process quickly and efficiently."""},
+When in doubt, preserve the original content. The goal is to maintain authentic gaming atmosphere while only removing genuinely inappropriate content.
+
+Return the processed text without explanations or markers."""},
                 {"role": "user", "content": chunk}
             ]
         )
-        return response.choices[0].message.content
+        cleaned_chunks.append(response.choices[0].message.content)
+        
+        if total_chunks > 1:
+            progress_bar.progress((i + 1) / total_chunks)
     
-    # Process chunks in batches
-    cleaned_chunks = batch_process_chunks(chunks, process_chunk)
+    if total_chunks > 1:
+        st.write("Processing complete!")
     
     return ' '.join(cleaned_chunks)
 
 def generate_summary(text: str) -> str:
-    """Step 2: Create initial summary from sanitized text"""
-    # Split into chunks if needed
-    chunks = chunk_text(text, chunk_size=8000)  # Smaller chunks for summary
+    """Generate accurate, specific summaries without fabrication"""
+    chunks = chunk_text(text, chunk_size=8000)
     summaries = []
     
     for chunk in chunks:
@@ -137,74 +109,75 @@ def generate_summary(text: str) -> str:
             model=MODEL_NAME,
             temperature=TEMPERATURE,
             messages=[
-                {"role": "system", "content": f"""You are a D&D session summarizer. Create a professional summary of the game events.
+                {"role": "system", "content": """You are a D&D session summarizer focused on ACCURACY and SPECIFICITY. 
 
-PARTY MEMBERS:
-{', '.join(f"{name} ({role})" for name, role in PARTY_MEMBERS.items())}
+CRITICAL RULES:
+1. ONLY include events/details explicitly mentioned in the text
+2. NO fabrication of events, dialogue, or character actions
+3. If information is missing, note it as "Not specified in session"
+4. Use exact numbers, locations, and descriptions from the text
+5. Quote important dialogue or descriptions when relevant
 
-FORMAT THE SUMMARY AS FOLLOWS:
+FORMAT THE SUMMARY AS:
 
 MISSION CONTEXT:
-- Current quest/objective
-- Where the party is and why
+- Current quest/objective (exactly as stated)
+- Current location (only if explicitly mentioned)
+- [Mark "Not specified" for missing elements]
 
 KEY EVENTS:
-- Major story developments with character-specific actions
-- Significant combat encounters noting individual contributions
-- Important discoveries and who made them
-- Critical decisions made by the party
+- List specific actions, outcomes, and developments
+- Include exact damage numbers, rolls, and mechanical details
+- Quote notable dialogue or descriptions
 
-CHARACTER ACTIONS & DEVELOPMENT:
-- Notable individual character moments
-- Key role-playing decisions
-- Significant combat achievements
-- Character relationships/interactions
+CHARACTER ACTIONS:
+- Only documented actions/decisions by named characters
+- Include mechanical details (damage dealt/taken, spell slots used)
+- List equipment/inventory changes
 
 ENVIRONMENT & DISCOVERIES:
-- New locations explored
-- Important items found and who found them
-- Environmental challenges overcome
-- Significant NPCs encountered
+- Specific locations explored
+- Items found (with finder named)
+- Actual encounters and their outcomes
+- NPCs met (with context)
 
 CURRENT SITUATION:
-- Where the party ended up
-- Immediate challenges ahead
-- Available options/next steps"""},
+- Party's exact position/status at session end
+- Remaining resources (HP, spells, etc.)
+- Known immediate threats/options"""},
                 {"role": "user", "content": chunk}
             ]
         )
         summaries.append(response.choices[0].message.content)
     
-    # If we had multiple chunks, combine them
     if len(summaries) > 1:
         combined_summary = "\n\n".join(summaries)
-        # Create a final unified summary
         response = client.chat.completions.create(
             model=MODEL_NAME,
             temperature=TEMPERATURE,
             messages=[
-                {"role": "system", "content": "You are a D&D session summarizer. Combine these multiple summaries into one coherent summary, removing any redundancy while maintaining all important events and details."},
+                {"role": "system", "content": "Combine these summaries while maintaining strict accuracy. Include only explicitly stated events and details. Mark any unclear or missing information as 'Not specified in session'."},
                 {"role": "user", "content": combined_summary}
             ]
         )
         return response.choices[0].message.content
-    else:
-        return summaries[0]
+    
+    return summaries[0]
 
 def polish_summary(text: str) -> str:
-    """Step 3: Final polish to ensure professional tone"""
+    """Final polish to ensure professional formatting while preserving content"""
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         temperature=0.3,
         messages=[
-            {"role": "system", "content": """You are an editor reviewing D&D session summaries. Your task is to:
-1. Ensure completely professional language
-2. Maintain clear and engaging narrative flow
-3. Keep all game events and character actions
-4. Format the text consistently
-5. Verify section headers are properly placed
+            {"role": "system", "content": """You are editing a D&D session summary. Your task is to:
+1. Ensure consistent formatting
+2. Maintain all specific details and numbers
+3. Preserve gaming terminology and character references
+4. Keep exact damage values and mechanical information
+5. Format section headers clearly
 
-Make minimal changes - focus only on language and tone while preserving all content.
+Make minimal content changes - focus on formatting and readability.
 Return the polished summary without any explanations."""},
             {"role": "user", "content": text}
         ]
@@ -212,6 +185,7 @@ Return the polished summary without any explanations."""},
     return response.choices[0].message.content
 
 def create_docx(summary: str) -> BytesIO:
+    """Create a Word document from the summary"""
     doc = Document()
     doc.add_heading('D&D Session Summary', 0)
     doc.add_paragraph(summary)
@@ -232,7 +206,7 @@ if uploaded_file:
             text = uploaded_file.read().decode('utf-8')
             
             # Step 1: Sanitize content
-            with st.spinner('Cleaning up transcript...'):
+            with st.spinner('Processing transcript...'):
                 cleaned_text = sanitize_text(text)
             
             # Step 2: Generate summary
