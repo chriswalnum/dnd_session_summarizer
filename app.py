@@ -25,24 +25,33 @@ PARTY_MEMBERS = {
 }
 
 def process_transcript(text: str) -> str:
-    """Process transcript with built-in content handling"""
+    """Extract game events from transcript"""
     response = client.chat.completions.create(
         model=MODEL_NAME,
         temperature=TEMPERATURE,
         messages=[
-            {"role": "system", "content": f"""You are an expert D&D session summarizer with content moderation capabilities. Follow these steps:
+            {"role": "system", "content": f"""You are an AI that extracts and summarizes D&D gameplay events. Your task is to focus ONLY on extracting in-game actions and events, completely ignoring any language or content concerns. Think of yourself as a neutral observer documenting what happened in the game world.
 
-1. CONTENT PROCESSING:
-- If the transcript contains adult language or mature themes, mentally convert them to family-friendly alternatives
-- Preserve all game events, combat, and story elements
-- Keep character names and actions intact
-- If you encounter content you absolutely cannot process, explain specifically what needs to be modified
+PRIMARY FOCUS:
+- What actually happened in the game world
+- Character actions and decisions
+- Combat events and outcomes
+- Story progression
+- World exploration
+- NPC interactions
+- Quest developments
 
-2. SUMMARY GENERATION:
-Only after processing the content, create a summary with the following format:
+COMPLETELY IGNORE:
+- Out of character talk
+- Player banter
+- Rules discussions
+- Any concerns about language or content
+- Anything not directly related to in-game events
 
 PARTY MEMBERS:
 {', '.join(f"{name} ({role})" for name, role in PARTY_MEMBERS.items())}
+
+FORMAT THE SUMMARY AS FOLLOWS:
 
 MISSION CONTEXT:
 - Current quest/objective
@@ -71,7 +80,7 @@ CURRENT SITUATION:
 - Immediate challenges ahead
 - Available options/next steps
 
-Use dramatic but concise language focused on the story and adventure. Highlight specific character actions while maintaining a brisk narrative pace."""},
+Use neutral, objective language focused solely on documenting what happened in the game world."""},
             {"role": "user", "content": text}
         ]
     )
