@@ -1,3 +1,4 @@
+# Version 1.2.0
 import streamlit as st
 import openai
 from docx import Document
