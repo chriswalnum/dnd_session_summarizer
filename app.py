@@ -1,8 +1,7 @@
 # Version 1.2.2
 # Changes:
-# - Added CombatStats tracking
-# - Improved enemy and damage counting
-# - Enhanced fact-based summarization
+# - Simplified stats tracking
+# - Improved contextual accuracy
 # - Integrated sanitizer into main app
 
 import streamlit as st
@@ -11,21 +10,6 @@ from docx import Document
 from io import BytesIO
 import re
 from typing import Dict, List, Set
-from dataclasses import dataclass
-from collections import defaultdict
-
-@dataclass
-class CombatStats:
-    enemies: Dict[str, int] = None
-    damage_dealt: Dict[str, List[int]] = None
-    damage_taken: Dict[str, List[int]] = None
-    kills: Dict[str, int] = None
-    
-    def __post_init__(self):
-        self.enemies = defaultdict(int)
-        self.damage_dealt = defaultdict(list)
-        self.damage_taken = defaultdict(list)
-        self.kills = defaultdict(int)
 
 class DnDSanitizer:
     def __init__(self):
@@ -51,51 +35,6 @@ class DnDSanitizer:
                 sanitized_words.append(word)
                 
         return ' '.join(sanitized_words)
-        
-    def is_safe(self, phrase: str) -> bool:
-        words = phrase.lower().split()
-        return not any(word.strip('.,!?') in self.profanity_set 
-                      for word in words 
-                      if word not in self.dnd_allowlist)
-
-class SessionAnalyzer:
-    def __init__(self, party_members: Dict[str, str]):
-        self.party_members = party_members
-        self.combat_stats = CombatStats()
-        
-    def extract_damage(self, text: str) -> None:
-        damage_pattern = r'(\d+)\s*(?:points? of)?\s*damage'
-        for line in text.split('\n'):
-            damage_matches = re.finditer(damage_pattern, line)
-            for match in damage_matches:
-                damage = int(match.group(1))
-                if any(member.lower() in line.lower() for member in self.party_members):
-                    for member in self.party_members:
-                        if member.lower() in line.lower():
-                            if 'takes' in line.lower() or 'receives' in line.lower():
-                                self.combat_stats.damage_taken[member].append(damage)
-                            else:
-                                self.combat_stats.damage_dealt[member].append(damage)
-                            break
-    
-    def track_enemies(self, text: str) -> None:
-        enemy_types = {'kobold', 'orc', 'goblin', 'dragon', 'demon', 'undead'}
-        for line in text.split('\n'):
-            line_lower = line.lower()
-            for enemy in enemy_types:
-                if enemy in line_lower:
-                    count_pattern = r'(\d+)\s+' + enemy
-                    matches = re.finditer(count_pattern, line_lower)
-                    for match in matches:
-                        self.combat_stats.enemies[enemy] += int(match.group(1))
-            
-            if 'killed' in line_lower or 'defeated' in line_lower:
-                for enemy in enemy_types:
-                    if enemy in line_lower:
-                        kill_pattern = r'(\d+)\s+' + enemy
-                        matches = re.finditer(kill_pattern, line_lower)
-                        for match in matches:
-                            self.combat_stats.kills[enemy] += int(match.group(1))
 
 def chunk_text(text: str, chunk_size: int = 8000) -> list[str]:
     sentences = text.split('. ')
@@ -119,7 +58,7 @@ def chunk_text(text: str, chunk_size: int = 8000) -> list[str]:
     
     return chunks
 
-def generate_summary(text: str, client: openai.OpenAI, analyzer: SessionAnalyzer) -> str:
+def generate_summary(text: str, client: openai.OpenAI) -> str:
     chunks = chunk_text(text)
     summaries = []
     
@@ -129,29 +68,17 @@ def generate_summary(text: str, client: openai.OpenAI, analyzer: SessionAnalyzer
         progress_bar = st.progress(0)
         
     for i, chunk in enumerate(chunks):
-        analyzer.extract_damage(chunk)
-        analyzer.track_enemies(chunk)
-        
-        # Generate summary for this chunk
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             temperature=0.2,
             messages=[
-                {"role": "system", "content": """Generate a D&D session summary with strict accuracy:
-- Only include confirmed enemy counts and types
-- Use exact damage numbers from combat
-- Reference specific character actions and outcomes
-- Do not add speculative or decorative details
-- Format as structured sections (Combat, Exploration, etc.)
-- Include only events explicitly described in the text"""},
-                {"role": "user", "content": f"""Summarize this session chunk using these verified statistics:
-Enemy Counts: {dict(analyzer.combat_stats.enemies)}
-Confirmed Kills: {dict(analyzer.combat_stats.kills)}
-Damage Dealt: {dict(analyzer.combat_stats.damage_dealt)}
-Damage Taken: {dict(analyzer.combat_stats.damage_taken)}
-
-Session Text:
-{chunk}"""}
+                {"role": "system", "content": """Generate a D&D session summary focusing on key events and narrative:
+- Include major combat encounters and their outcomes
+- Describe significant character actions and decisions
+- Note important discoveries or plot developments
+- Focus on game-relevant events and interactions
+- Maintain narrative accuracy without exact number tracking"""},
+                {"role": "user", "content": chunk}
             ]
         )
         summaries.append(response.choices[0].message.content)
@@ -163,10 +90,10 @@ Session Text:
         st.write("Processing complete!")
         combined = "\n\n".join(summaries)
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             temperature=0.2,
             messages=[
-                {"role": "system", "content": "Combine these summaries into one cohesive narrative while maintaining numerical accuracy."},
+                {"role": "system", "content": "Combine these summaries into one cohesive narrative focusing on key events and outcomes."},
                 {"role": "user", "content": combined}
             ]
         )
@@ -184,11 +111,14 @@ def create_docx(summary: str) -> BytesIO:
     docx_file.seek(0)
     return docx_file
 
+# Configure Streamlit page
 st.set_page_config(page_title="D&D Session Summarizer")
 st.title("D&D Session Summarizer")
 
+# Initialize OpenAI client
 client = openai.OpenAI(api_key=st.secrets["openai"]["openai_api_key"])
 
+# Initialize party configuration
 PARTY_MEMBERS = {
     "Mike": "Rogue",
     "Justin": "Fighter",
@@ -198,8 +128,7 @@ PARTY_MEMBERS = {
     "Geoff": "Dungeon Master"
 }
 
-analyzer = SessionAnalyzer(PARTY_MEMBERS)
-
+# File uploader
 uploaded_file = st.file_uploader("Upload your D&D session transcript", type=['txt'])
 
 if uploaded_file:
@@ -207,14 +136,10 @@ if uploaded_file:
         try:
             text = uploaded_file.read().decode('utf-8')
             
-            with st.spinner('Analyzing session...'):
+            with st.spinner('Processing transcript...'):
                 sanitizer = DnDSanitizer()
                 cleaned_text = sanitizer.sanitize(text)
-                summary = generate_summary(cleaned_text, client, analyzer)
-            
-            st.subheader("Summary Statistics:")
-            st.write("Enemy Encounters:", dict(analyzer.combat_stats.enemies))
-            st.write("Confirmed Kills:", dict(analyzer.combat_stats.kills))
+                summary = generate_summary(cleaned_text, client)
             
             st.subheader("Summary:")
             st.write(summary)
