@@ -6,7 +6,49 @@ from io import BytesIO
 import re
 from typing import Set, List
 
-# [Previous imports and configs remain the same until sanitization class]
+# Configure the page
+st.set_page_config(page_title="D&D Session Summarizer")
+st.title("D&D Session Summarizer")
+
+# Initialize OpenAI client from Streamlit secrets
+client = openai.OpenAI(api_key=st.secrets["openai"]["openai_api_key"])
+
+# Constants for model settings
+MODEL_NAME = "gpt-4o-mini"
+TEMPERATURE = 0.2
+
+# Define party members and their classes
+PARTY_MEMBERS = {
+    "Mike": "Rogue",
+    "Justin": "Fighter",
+    "Dave": "Barbarian",
+    "Steve": "Sorcerer",
+    "Chris": "Bard",
+    "Geoff": "Dungeon Master"
+}
+
+def chunk_text(text: str, chunk_size: int = 15000) -> list[str]:
+    """Split text into larger chunks while maintaining sentence integrity"""
+    sentences = text.split('. ')
+    chunks = []
+    current_chunk = []
+    current_length = 0
+    
+    for sentence in sentences:
+        sentence_length = len(sentence.split()) * 1.3
+        
+        if current_length + sentence_length > chunk_size:
+            chunks.append('. '.join(current_chunk) + '.')
+            current_chunk = [sentence]
+            current_length = sentence_length
+        else:
+            current_chunk.append(sentence)
+            current_length += sentence_length
+    
+    if current_chunk:
+        chunks.append('. '.join(current_chunk) + '.')
+    
+    return chunks
 
 class DnDSanitizer:
     def __init__(self):
@@ -86,8 +128,6 @@ When in doubt, preserve the original content."""},
         st.write("Processing complete!")
     
     return ' '.join(cleaned_chunks)
-
-# [Rest of the code remains the same]
 
 def generate_summary(text: str) -> str:
     """Generate engaging, accurate summaries that capture D&D flavor"""
