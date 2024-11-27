@@ -97,7 +97,7 @@ class SessionAnalyzer:
                         for match in matches:
                             self.combat_stats.kills[enemy] += int(match.group(1))
 
-def chunk_text(text: str, chunk_size: int = 15000) -> list[str]:
+def chunk_text(text: str, chunk_size: int = 8000) -> list[str]:
     sentences = text.split('. ')
     chunks = []
     current_chunk = []
