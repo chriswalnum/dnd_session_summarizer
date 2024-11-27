@@ -3,15 +3,14 @@
 # - Added CombatStats tracking
 # - Improved enemy and damage counting
 # - Enhanced fact-based summarization
-# - Optimized token usage and chunking
-# - Reduced API calls
+# - Integrated sanitizer into main app
 
 import streamlit as st
 import openai
 from docx import Document
 from io import BytesIO
 import re
-from typing import Dict, List, Set, Union
+from typing import Dict, List, Set
 from dataclasses import dataclass
 from collections import defaultdict
 
@@ -98,25 +97,25 @@ class SessionAnalyzer:
                         for match in matches:
                             self.combat_stats.kills[enemy] += int(match.group(1))
 
-def chunk_text(text: str, chunk_size: int = 4000) -> List[str]:
-    paragraphs = text.split('\n\n')
+def chunk_text(text: str, chunk_size: int = 15000) -> list[str]:
+    sentences = text.split('. ')
     chunks = []
     current_chunk = []
     current_length = 0
     
-    for para in paragraphs:
-        para_length = len(para)
+    for sentence in sentences:
+        sentence_length = len(sentence.split()) * 1.3
         
-        if current_length + para_length > chunk_size and current_chunk:
-            chunks.append('\n\n'.join(current_chunk))
-            current_chunk = [para]
-            current_length = para_length
+        if current_length + sentence_length > chunk_size:
+            chunks.append('. '.join(current_chunk) + '.')
+            current_chunk = [sentence]
+            current_length = sentence_length
         else:
-            current_chunk.append(para)
-            current_length += para_length
+            current_chunk.append(sentence)
+            current_length += sentence_length
     
     if current_chunk:
-        chunks.append('\n\n'.join(current_chunk))
+        chunks.append('. '.join(current_chunk) + '.')
     
     return chunks
 
@@ -124,31 +123,50 @@ def generate_summary(text: str, client: openai.OpenAI, analyzer: SessionAnalyzer
     chunks = chunk_text(text)
     summaries = []
     
-    for chunk in chunks:
+    total_chunks = len(chunks)
+    if total_chunks > 1:
+        st.write(f"Processing {total_chunks} chunks of text...")
+        progress_bar = st.progress(0)
+        
+    for i, chunk in enumerate(chunks):
         analyzer.extract_damage(chunk)
         analyzer.track_enemies(chunk)
         
-        context = f"""Enemy Counts: {dict(analyzer.combat_stats.enemies)}
-Confirmed Kills: {dict(analyzer.combat_stats.kills)}
-Key Stats: Damage Dealt: {dict(analyzer.combat_stats.damage_dealt)}, Taken: {dict(analyzer.combat_stats.damage_taken)}"""
-
+        # Generate summary for this chunk
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             temperature=0.2,
             messages=[
-                {"role": "system", "content": "Generate factual D&D session summary focusing on confirmed events, exact numbers, and specific character actions."},
-                {"role": "user", "content": f"{context}\n\nChunk:\n{chunk}"}
+                {"role": "system", "content": """Generate a D&D session summary with strict accuracy:
+- Only include confirmed enemy counts and types
+- Use exact damage numbers from combat
+- Reference specific character actions and outcomes
+- Do not add speculative or decorative details
+- Format as structured sections (Combat, Exploration, etc.)
+- Include only events explicitly described in the text"""},
+                {"role": "user", "content": f"""Summarize this session chunk using these verified statistics:
+Enemy Counts: {dict(analyzer.combat_stats.enemies)}
+Confirmed Kills: {dict(analyzer.combat_stats.kills)}
+Damage Dealt: {dict(analyzer.combat_stats.damage_dealt)}
+Damage Taken: {dict(analyzer.combat_stats.damage_taken)}
+
+Session Text:
+{chunk}"""}
             ]
         )
         summaries.append(response.choices[0].message.content)
+        
+        if total_chunks > 1:
+            progress_bar.progress((i + 1) / total_chunks)
     
-    if len(summaries) > 1:
+    if total_chunks > 1:
+        st.write("Processing complete!")
         combined = "\n\n".join(summaries)
         response = client.chat.completions.create(
             model="gpt-4",
             temperature=0.2,
             messages=[
-                {"role": "system", "content": "Combine summaries into one cohesive narrative maintaining numerical accuracy."},
+                {"role": "system", "content": "Combine these summaries into one cohesive narrative while maintaining numerical accuracy."},
                 {"role": "user", "content": combined}
             ]
         )
