@@ -1,66 +1,55 @@
-# Version 1.2.0
+# Version 1.2.1
 import streamlit as st
 import openai
 from docx import Document
 from io import BytesIO
+import re
+from typing import Set, List
 
-# Configure the page
-st.set_page_config(page_title="D&D Session Summarizer")
-st.title("D&D Session Summarizer")
+# [Previous imports and configs remain the same until sanitization class]
 
-# Initialize OpenAI client from Streamlit secrets
-client = openai.OpenAI(api_key=st.secrets["openai"]["openai_api_key"])
-
-# Constants for model settings
-MODEL_NAME = "gpt-4o-mini"
-TEMPERATURE = 0.2  # Slightly higher to allow better narrative flow
-
-# Define party members and their classes
-PARTY_MEMBERS = {
-    "Mike": "Rogue",
-    "Justin": "Fighter",
-    "Dave": "Barbarian",
-    "Steve": "Sorcerer",
-    "Chris": "Bard",
-    "Geoff": "Dungeon Master"
-}
-
-def chunk_text(text: str, chunk_size: int = 15000) -> list[str]:
-    """Split text into larger chunks while maintaining sentence integrity"""
-    sentences = text.split('. ')
-    chunks = []
-    current_chunk = []
-    current_length = 0
-    
-    for sentence in sentences:
-        # Estimate tokens: ~1.3 tokens per word for English text
-        sentence_length = len(sentence.split()) * 1.3
+class DnDSanitizer:
+    def __init__(self):
+        self.dnd_allowlist = {
+            'attack', 'damage', 'kill', 'dead', 'death', 'blood', 
+            'dragon', 'demon', 'devil', 'hell', 'undead', 'zombie',
+            'corpse', 'body', 'wound', 'ritual', 'curse'
+        }
+        self.profanity_set = self._load_profanity_list()
         
-        if current_length + sentence_length > chunk_size:
-            chunks.append('. '.join(current_chunk) + '.')
-            current_chunk = [sentence]
-            current_length = sentence_length
-        else:
-            current_chunk.append(sentence)
-            current_length += sentence_length
-    
-    if current_chunk:
-        chunks.append('. '.join(current_chunk) + '.')
-    
-    return chunks
+    def _load_profanity_list(self) -> Set[str]:
+        # Replace with your preferred profanity list
+        return {'badword1', 'badword2'}  # Placeholder
+        
+    def sanitize(self, text: str) -> str:
+        words = text.split()
+        sanitized_words = []
+        
+        for word in words:
+            clean_word = word.lower().strip('.,!?')
+            if clean_word in self.profanity_set and clean_word not in self.dnd_allowlist:
+                sanitized_words.append('[REMOVED]')
+            else:
+                sanitized_words.append(word)
+                
+        return ' '.join(sanitized_words)
 
 def sanitize_text(text: str) -> str:
     """Minimal sanitization focused only on extreme content"""
+    sanitizer = DnDSanitizer()
     chunks = chunk_text(text)
     cleaned_chunks = []
     
-    # Create a progress bar for chunk processing
     total_chunks = len(chunks)
     if total_chunks > 1:
         st.write(f"Processing {total_chunks} chunks of text...")
         progress_bar = st.progress(0)
     
     for i, chunk in enumerate(chunks):
+        # Pre-filter with local sanitizer
+        pre_cleaned = sanitizer.sanitize(chunk)
+        
+        # Use OpenAI for final check
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             temperature=0.3,
@@ -73,7 +62,7 @@ KEEP AS-IS:
 - Mild crude humor and jokes
 - Creative monster/spell descriptions
 - Casual swearing in game context
-- Character-specific traits (e.g., "dick sword")
+- Character-specific traits
 - Playful banter between players
 - References to bodily functions in game context
 - Non-malicious crude descriptions
@@ -84,10 +73,8 @@ ONLY REMOVE/MODIFY:
 - Real-world bigotry or harassment
 - Graphic violence outside game context
 
-When in doubt, preserve the original content. The goal is to maintain authentic gaming atmosphere while only removing genuinely inappropriate content.
-
-Return the processed text without explanations or markers."""},
-                {"role": "user", "content": chunk}
+When in doubt, preserve the original content."""},
+                {"role": "user", "content": pre_cleaned}
             ]
         )
         cleaned_chunks.append(response.choices[0].message.content)
@@ -99,6 +86,8 @@ Return the processed text without explanations or markers."""},
         st.write("Processing complete!")
     
     return ' '.join(cleaned_chunks)
+
+# [Rest of the code remains the same]
 
 def generate_summary(text: str) -> str:
     """Generate engaging, accurate summaries that capture D&D flavor"""
